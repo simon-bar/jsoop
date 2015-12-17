@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>JSOOP Framework tests</title>
+		<link rel="stylesheet" href="http://code.jquery.com/qunit/qunit-1.20.0.css">
+	</head>
+	<body>
+		<div id="qunit"></div>
+		<div id="qunit-fixture"></div>
+		<script src="http://code.jquery.com/qunit/qunit-1.20.0.js"></script>
+		<script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+		<script src="../oop.js"></script>
+		<script type="text/javascript">
+test("Constructors test", function() {
+	function A(arg) {
+		this.arg = arg;
+	}
+	
+	var B = function(_super, one, two) {
+		_super(two);
+		
+		this.getArg = function () {
+			return this.arg;
+		};
+	}.EXTEND(A);
+	
+	var b = new B("one", "two");
+	
+	strictEqual(b.getArg(), "two", "The _super constructor works and passes right arguments");
+});
+
+test("Basic inheritance test", function() {
+	function A() {
+		this.aProperty = "yay";
+	
+		this.funnyFun = function() {
+			return this.aProperty;
+		};
+	}
+
+	var B = function(_super) {
+		_super();
+	}.EXTEND(A);
+
+	var b = new B();
+
+	strictEqual(b.funnyFun(), "yay", "The method has been properly inherited from the super class");
+});
+
+test("Basic method overriding test", function() {
+	function A() {
+		this.getInt = function () {
+			return 1;
+		};
+	}
+	
+	var B = function(_super) {
+		_super();
+		
+		this.getInt = function () {
+			return 2;
+		};
+	}.EXTEND(A);
+	
+	var b = new B();
+	
+	strictEqual(b.getInt(), 2, "Method successfully overriden");
+});
+
+test("Advanced method overriding test", function() {
+	var baseInt = 1;
+	
+	function IncBy1() {
+		this.getInt = function (arg) {
+			return arg + 1;
+		};
+	}
+	
+	var IncBy2 = function(_super) {
+		_super();
+		
+		OVERRIDE(this, {
+			getInt: function(_super, arg) {
+				return _super(arg) + 1;
+			}
+		});
+	}.EXTEND(IncBy1);
+	
+	var incBy2 = new IncBy2();
+	
+	strictEqual(incBy2.getInt(baseInt), baseInt + 2, "The call to _super method works in overriden methods");
+});
+
+test("Test if the instanceof operator works as desired", function() {
+	function A() {}
+
+	var B = function(_super) {
+		_super();
+	}.EXTEND(A);
+
+	var C = function(_super) {
+		_super();
+	}.EXTEND(B);
+
+	var D = function(_super) {
+		_super();
+	}.EXTEND(B);
+	
+	var b = new B(), c = new C(), d = new D();
+
+	ok(b instanceof B, "An object of class B is correctly verified as an instance of B by the instancof operator");
+	ok(b instanceof A, "Direct inheritance detected by the instanceof operator");
+	ok(c instanceof A, "Indirect inheritance detected by the instanceof operator");
+	ok(!(d instanceof C), "No inheritance correctly verified");
+	ok(!(c instanceof D), "No inheritance correctly verified");
+});
+
+test("Prototypes handling works as designed", function() {
+	function A() {}
+	
+	A.prototype.inheritMe = function() {
+		return 1;
+	};
+
+	var B = function(_super) {
+		_super();
+	}.EXTEND(A, {
+		newPrototypeMethod: function() {}
+	});
+
+	var a = new A();
+	var b = new B();
+	
+	function hasNonOwnPropertyMethod(obj, mname) {
+		return $.isFunction(obj[mname]) && !obj.hasOwnProperty(mname);
+	}
+
+	ok(hasNonOwnPropertyMethod(b, "inheritMe"), "Method from the superclass prototype is accessible from the instance of the subclass");
+	ok(hasNonOwnPropertyMethod(b, "newPrototypeMethod"), "Class's own prototype has been setup correctly");
+	ok(a.newPrototypeMethod === undefined, "Extending a class doesn't modify the prototype of this class");
+});
+
+test("Static and instance fields definitions work as designed", function() {
+	function A() {
+		this.superclassInstanceField = "sif";
+	}
+
+	var B = function(_super) {
+		_super();
+		
+		this.instanceField = "instance";
+	}.EXTEND(A)
+	 .STATIC(function() {
+		this.staticField = "static";
+	});
+	
+	var b = new B();
+	
+	ok(B.staticField === "static" , "Static field has been properly set");
+	ok(b.instanceField === "instance" , "Instance field has been properly set");
+	ok(b.superclassInstanceField === "sif" , "Instance field has been properly set");
+});
+
+test("The \"pythonic\" __init__() gets called when all methods and private variables (var x;) have been initialized", function() {
+	function A() {
+		var a;
+		
+		this.getA = function() {
+			return a;
+		};
+
+		/* "protected" - will be overriden */
+		this.getInitialValForA = function() {
+			return 1;
+		};
+
+		__INIT__(this, function() {
+			a = this.getInitialValForA();
+		});
+	}
+
+	var B = function(_super) {
+		_super();
+		
+		this.getInitialValForA = function() {
+			return 2;
+		};
+	}.EXTEND(A);
+
+	var C = function(_super) {
+		_super();
+		
+		this.getInitialValForA = function() {
+			return 3;
+		};
+	}.EXTEND(B);
+
+	var b = new B();
+	var c = new C();
+
+	strictEqual(2, b.getA(), "The execution of __init__() has been correctly postponed");
+	strictEqual(3, c.getA(), "A method overridden twice also works as expected");
+});
+
+test("The __init__() methods get implicitly executed in a top-down manner", function() {
+	function A() {
+		var a;
+		
+		this.getA = function() {
+			return a;
+		};
+
+		__INIT__(this, function() {
+			a = [1];
+		});
+	}
+	
+	var B = function(_super) {
+		_super();
+		
+		__INIT__(this, function() {
+			this.getA().push(2);
+		});
+	}.EXTEND(A);
+
+	var b = new B();
+
+	deepEqual(b.getA(), [1, 2], "Both __init__() methods have been implicitly executed in the correct order");
+});
+
+test("The __init__() method cannot be called after the object has been created with the \"new\" operator", function() {
+	function A() {
+		var a;
+
+		__INIT__(this, function() {
+			a = 1;
+		});
+	}
+	
+	var B = function(_super) {
+		_super();
+
+		__INIT__(this, function() {});
+	}.EXTEND(A);
+
+	var b = new B();
+	
+	throws(function() {
+		b.__init__();
+	}, TypeError, "The __init__ property doesn't exist");
+});
+		</script>
+	</body>
+</html>
